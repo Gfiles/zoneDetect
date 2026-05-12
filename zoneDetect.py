@@ -10,7 +10,8 @@ from PIL import Image
 import pystray
 from pystray import MenuItem as item
 
-VERSION = "2026.05.12"
+import _version
+VERSION = _version.VERSION
 
 LEARNING_PHASE_FRAMES = 60  # Frames for fast baseline learning on startup/ROI reset (~2s at 30fps)
 

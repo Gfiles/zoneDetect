@@ -16,29 +16,16 @@ DEVELOPER_NAME = "Gavin Goncalves"  # <-- IMPORTANT: Change this to your name/co
 MAIN_SCRIPT = "zoneDetect.py"
 FILE_DESCRIPTION = "zoneDetect"
 
-# --- Update version in main script ---
-print(f"Updating version in {MAIN_SCRIPT} to {VERSION}...")
+# --- Generate version file ---
+version_module = "_version.py"
+print(f"Generating version module '{version_module}' with version {VERSION}...")
 try:
-    with open(MAIN_SCRIPT, 'r', encoding='utf-8') as f:
-        content = f.read()
-
-    # Use regex to find and replace the version line: VERSION = "..."
-    new_content, count = re.subn(
-        r'^(VERSION\s*=\s*["\']).*?(["\'])',  # Regex to find VERSION = "..." or '...'
-        fr'\g<1>{VERSION}\g<2>',             # Replace with the new version, keeping original quotes
-        content,
-        count=1,                             # Replace only the first occurrence
-        flags=re.MULTILINE                   # Ensure ^ matches start of line
-    )
-
-    if count > 0:
-        with open(MAIN_SCRIPT, 'w', encoding='utf-8') as f:
-            f.write(new_content)
-        print(f"Successfully updated version in {MAIN_SCRIPT}.")
-    else:
-        print(f"Warning: Could not find a VERSION line to update in {MAIN_SCRIPT}.")
+    with open(version_module, 'w', encoding='utf-8') as f:
+        f.write(f'VERSION = "{VERSION}"\n')
+    print(f"Successfully generated {version_module}.")
 except Exception as e:
-    print(f"An error occurred while updating version in {MAIN_SCRIPT}: {e}")
+    print(f"CRITICAL ERROR: Failed to generate {version_module}: {e}")
+    sys.exit(1)
 
 # --- Architecture-specific modifications ---
 machine_arch = platform.machine().lower()
@@ -50,6 +37,7 @@ elif sys.platform.startswith('linux') and machine_arch in ('x86_64', 'i686', 'x8
     APP_NAME += "_deb"
 
 # --- PyInstaller Build Command ---
+separator = os.pathsep
 if sys.platform == 'win32':
     pyinstaller_command = [
         'pyinstaller', 
@@ -58,6 +46,7 @@ if sys.platform == 'win32':
         '--noconsole',
         '--clean', 
         '--icon=icon.ico',
+        '--add-data', f'icon.ico{separator}.',
         MAIN_SCRIPT
     ]
 else:

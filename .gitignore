@@ -4,6 +4,7 @@ dist/
 dist_*/
 *.spec
 version.txt
+_version.py
 
 # Python
 __pycache__/
@@ -18,7 +19,6 @@ verify_logic.json
 
 # Scratch and Temporary
 scratch/
-icon.ico
 
 # OS specific
 .DS_Store
