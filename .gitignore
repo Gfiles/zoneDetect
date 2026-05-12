@@ -1,9 +1,25 @@
-/build
-/dist
-/dist_old
-/scratch
-/verify_logic.json
-/version.txt
-/zoneDetect.json
-/zoneDetect.spec
-/__pycache__
+# Build and Distribution
+build/
+dist/
+dist_*/
+*.spec
+version.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# Configuration
+zoneDetect.json
+verify_logic.json
+
+# Scratch and Temporary
+scratch/
+icon.ico
+
+# OS specific
+.DS_Store
+Thumbs.db

@@ -39,6 +39,13 @@ class ZoneDetector:
         self.window_name = "zoneDetect - Premium Motion Control"
         cv2.namedWindow(self.window_name)
 
+        # Performance and state tracking
+        self.last_save_time = time.time()
+        self.config_dirty = False
+        self.fps_start_time = time.time()
+        self.fps_counter = 0
+        self.current_fps = 0
+
     def _get_cwd(self):
         if getattr(sys, 'frozen', False):
             return os.path.dirname(sys.executable)
@@ -53,10 +60,12 @@ class ZoneDetector:
         with open(self.config_path, 'r') as f:
             return json.load(f)
 
-    def save_config(self):
-        with open(self.config_path, 'w') as f:
-            json.dump(self.config, f, indent=4)
-        print(f"[*] Config saved to {self.config_path}")
+    def save_config(self, force=False):
+        if self.config_dirty or force:
+            with open(self.config_path, 'w') as f:
+                json.dump(self.config, f, indent=4)
+            self.config_dirty = False
+            print(f"[*] Config synchronized to {self.config_path}")
 
     def init_camera(self):
         idx = self.config.get('camera_index', 0)
@@ -70,18 +79,17 @@ class ZoneDetector:
                 if self.cap.isOpened():
                     print(f"[+] Found working camera at index {i}")
                     self.config['camera_index'] = i
-                    self.save_config()
+                    self.config_dirty = True
                     break
         return self.cap.isOpened()
 
     def select_roi(self, frame):
         print("[*] ROI Selection Mode. Draw a rectangle and press ENTER or SPACE. Press 'c' to cancel.")
-        # We use a separate window name to avoid messing with the main HUD during selection
         selector_window = "ROI Selector - Draw and press ENTER"
         roi = cv2.selectROI(selector_window, frame, fromCenter=False, showCrosshair=True)
         if roi[2] > 0 and roi[3] > 0:
             self.config['roi'] = {"x": int(roi[0]), "y": int(roi[1]), "width": int(roi[2]), "height": int(roi[3])}
-            self.save_config()
+            self.config_dirty = True
             self.avg_frame = None # Reset background model
             print("[+] ROI Updated.")
         
@@ -102,7 +110,7 @@ class ZoneDetector:
         mean_color_bgr = cv2.mean(roi_frame, mask=mask)[:3]
         mean_color_rgb = [int(x) for x in mean_color_bgr[::-1]]
         self.config['base_colors_rgb'].append(mean_color_rgb)
-        self.save_config()
+        self.config_dirty = True
         print(f"[+] Added base color to ignore: {mean_color_rgb}")
 
     def run(self):
@@ -110,7 +118,7 @@ class ZoneDetector:
             print("[ERROR] No camera available. Exiting.")
             return
 
-        print("[*] zoneDetect Running. Press 'R' for ROI, 'B' for Base Color, 'ESC' to Exit.")
+        print("[*] zoneDetect Running. Keys: R:ROI, B:Base, +/-:Thresh, []:Timer, ESC:Exit")
         
         while True:
             ret, frame = self.cap.read()
@@ -119,8 +127,14 @@ class ZoneDetector:
                 time.sleep(1)
                 continue
 
+            # FPS Calculation
+            self.fps_counter += 1
+            if time.time() - self.fps_start_time > 1.0:
+                self.current_fps = self.fps_counter
+                self.fps_counter = 0
+                self.fps_start_time = time.time()
+
             roi_cfg = self.config['roi']
-            # Bounds check
             if frame.shape[0] < roi_cfg['y'] + roi_cfg['height'] or frame.shape[1] < roi_cfg['x'] + roi_cfg['width']:
                 cv2.putText(frame, "ROI OUT OF BOUNDS - Press 'R'", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
                 roi_valid = False
@@ -153,7 +167,6 @@ class ZoneDetector:
                         if not self.is_base_color(mean_color):
                             motion_detected = True
 
-            # Logic for timing and OSC
             now = time.time()
             if motion_detected:
                 self.last_detection_time = now
@@ -178,7 +191,6 @@ class ZoneDetector:
             cv2.rectangle(frame, (bar_x, roi_cfg['y']), (bar_x + 15, roi_cfg['y'] + bar_h), (50, 50, 50), -1)
             intensity_h = int(min(1.0, intensity / (self.config['color_change_threshold'] / (roi_cfg['width'] * roi_cfg['height'] + 1) * 5)) * bar_h)
             cv2.rectangle(frame, (bar_x, roi_cfg['y'] + bar_h - intensity_h), (bar_x + 15, roi_cfg['y'] + bar_h), (255, 100, 0), -1)
-            # Threshold marker on bar
             thresh_y = roi_cfg['y'] + bar_h - int((self.config['color_change_threshold'] / (roi_cfg['width'] * roi_cfg['height'] + 1) / ( (self.config['color_change_threshold'] / (roi_cfg['width'] * roi_cfg['height'] + 1) * 5) + 1e-6)) * bar_h)
             cv2.line(frame, (bar_x - 2, thresh_y), (bar_x + 17, thresh_y), (0, 255, 255), 2)
 
@@ -187,11 +199,13 @@ class ZoneDetector:
             hud_info = [
                 (f"MODE: {'DETECTING' if self.detect_movement else 'COOLDOWN'}", status_color),
                 (f"INTENSITY: {intensity:.2%}", (255, 255, 255)),
-                (f"THRESHOLD: {self.config['color_change_threshold']} (+/- to adjust)", (0, 255, 255)),
-                ("R: ROI | B: BASE COLOR | ESC: EXIT", (100, 255, 255))
+                (f"THRESH: {self.config['color_change_threshold']} (+/-)", (0, 255, 255)),
+                (f"TIMER: {self.config['timerDuration']:.1f}s ([/])", (255, 150, 0)),
+                (f"PERF: {self.current_fps} FPS", (200, 200, 200)),
+                ("R: ROI | B: BASE | ESC: EXIT", (100, 255, 255))
             ]
             for text, color in hud_info:
-                cv2.putText(frame, text, (10, y_off), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,0,0), 3) # Outline
+                cv2.putText(frame, text, (10, y_off), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,0,0), 3)
                 cv2.putText(frame, text, (10, y_off), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 1)
                 y_off += 25
 
@@ -206,11 +220,18 @@ class ZoneDetector:
                 self.add_base_color(roi, thresh)
             elif key == ord('=') or key == ord('+'):
                 self.config['color_change_threshold'] += 100
-                self.save_config()
+                self.config_dirty = True
             elif key == ord('-') or key == ord('_'):
                 self.config['color_change_threshold'] = max(100, self.config['color_change_threshold'] - 100)
-                self.save_config()
+                self.config_dirty = True
+            elif key == ord(']'):
+                self.config['timerDuration'] += 0.5
+                self.config_dirty = True
+            elif key == ord('['):
+                self.config['timerDuration'] = max(0.5, self.config['timerDuration'] - 0.5)
+                self.config_dirty = True
 
+        self.save_config(force=True)
         self.cap.release()
         cv2.destroyAllWindows()
         print("[*] Application closed.")
