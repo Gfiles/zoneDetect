@@ -28,7 +28,8 @@ DEFAULT_CONFIG = {
         "ip": "127.0.0.1",
         "port": 5005,
         "address": "/motion"
-    }
+    },
+    "show_hud": True
 }
 
 class ZoneDetector:
@@ -65,7 +66,7 @@ class ZoneDetector:
         
         # System Tray & Background State
         self.exit_event = threading.Event()
-        self.show_hud = not headless
+        self.show_hud = self.config.get('show_hud', True) if not headless else False
         self.tray_icon = None
         
         if not headless:
@@ -89,12 +90,15 @@ class ZoneDetector:
 
     def _menu_show_hud(self):
         self.show_hud = True
+        self.config['show_hud'] = True
+        self.config_dirty = True
         print("[*] HUD Enabled")
 
     def _menu_hide_hud(self):
         self.show_hud = False
+        self.config['show_hud'] = False
+        self.config_dirty = True
         print("[*] HUD Disabled")
-        cv2.destroyAllWindows()
 
     def _menu_exit(self):
         print("[*] Exiting from Tray...")
