@@ -55,16 +55,11 @@ if sys.platform == 'win32':
         'pyinstaller', 
         '--name', APP_NAME, 
         '--onefile', 
+        '--noconsole',
         '--clean', 
         '--icon=icon.ico',
         MAIN_SCRIPT
     ]
-    """
-    pyinstaller_command = [
-        'pyinstaller', '--name', APP_NAME, '--onefile', '--clean', '--icon=icon.png',
-        MAIN_SCRIPT
-    ]
-    """
 else:
     pyinstaller_command = [
         'pyinstaller', 
@@ -83,10 +78,14 @@ if sys.platform == 'win32':
     print("Windows platform detected. Adding version info and windowed mode.")
     # --- Generate Version File ---
     now = datetime.now()
-    major, minor, patch = map(int, VERSION.split('.'))
+    # Split VERSION by '.' and ensure we have 3 parts for major.minor.patch
+    v_parts = VERSION.split('.')
+    major = int(v_parts[0]) if len(v_parts) > 0 else 0
+    minor = int(v_parts[1]) if len(v_parts) > 1 else 0
+    patch = int(v_parts[2]) if len(v_parts) > 2 else 0
     build = now.hour * 10000 + now.minute * 100 + now.second
 
-    version_info_content = f"""
+    version_info_template = """
 # UTF-8
 VSVersionInfo(
   ffi=FixedFileInfo(
@@ -104,19 +103,26 @@ VSVersionInfo(
       [
       StringTable(
         u'040904B0',
-        [StringStruct(u'CompanyName', u'{DEVELOPER_NAME}'),
-        StringStruct(u'FileDescription', u'{FILE_DESCRIPTION}'),
-        StringStruct(u'FileVersion', u'{VERSION}.{build}'),
-        StringStruct(u'InternalName', u'{APP_NAME}'),
-        StringStruct(u'LegalCopyright', u'© {DEVELOPER_NAME}. All rights reserved.'),
-        StringStruct(u'OriginalFilename', u'{APP_NAME}.exe'),
-        StringStruct(u'ProductName', u'{APP_NAME}'),
-        StringStruct(u'ProductVersion', u'{VERSION}')])
+        [StringStruct(u'CompanyName', u'{developer_name}'),
+        StringStruct(u'FileDescription', u'{file_description}'),
+        StringStruct(u'FileVersion', u'{version}.{build}'),
+        StringStruct(u'InternalName', u'{app_name}'),
+        StringStruct(u'LegalCopyright', u'© {developer_name}. All rights reserved.'),
+        StringStruct(u'OriginalFilename', u'{app_name}.exe'),
+        StringStruct(u'ProductName', u'{app_name}'),
+        StringStruct(u'ProductVersion', u'{version}')])
       ]),
     VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
   ]
 )
 """
+    version_info_content = version_info_template.format(
+        major=major, minor=minor, patch=patch, build=build,
+        developer_name=DEVELOPER_NAME,
+        file_description=FILE_DESCRIPTION,
+        version=VERSION,
+        app_name=APP_NAME
+    )
     with open(version_file_path, "w", encoding="utf-8") as f:
         f.write(version_info_content)
     print(f"Generated '{version_file_path}' with version {VERSION}")
