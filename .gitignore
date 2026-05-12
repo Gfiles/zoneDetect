@@ -1,0 +1,9 @@
+/build
+/dist
+/dist_old
+/scratch
+/verify_logic.json
+/version.txt
+/zoneDetect.json
+/zoneDetect.spec
+/__pycache__
